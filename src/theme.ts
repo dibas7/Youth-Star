@@ -1,19 +1,16 @@
+import { lightColors } from './theme/colors';
+import { spacing as newSpacing } from './theme/spacing';
+
 export const colors = {
-  primary: '#2563eb',
-  primarySoft: '#dbeafe',
-  success: '#16a34a',
-  danger: '#dc2626',
-  background: '#f8fbff',
-  surface: '#ffffff',
-  text: '#0f172a',
-  muted: '#64748b',
-  border: '#e2e8f0',
+  primary: lightColors.primary,
+  primarySoft: lightColors.primarySoft,
+  success: lightColors.success,
+  danger: lightColors.danger,
+  background: lightColors.background,
+  surface: lightColors.surface,
+  text: lightColors.text,
+  muted: lightColors.muted,
+  border: lightColors.border,
 };
 
-export const spacing = {
-  xs: 8,
-  sm: 12,
-  md: 16,
-  lg: 20,
-  xl: 24,
-};
+export const spacing = newSpacing;

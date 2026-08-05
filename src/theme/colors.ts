@@ -1,0 +1,31 @@
+export const lightColors = {
+  background: '#FFFFFF',
+  surface: '#F7F7F7',
+  primaryText: '#111111',
+  secondaryText: '#666666',
+  border: '#E5E5E5',
+  primaryButton: '#111111',
+  buttonText: '#FFFFFF',
+  primary: '#111111',
+  primarySoft: '#F0F0F0',
+  success: '#111111',
+  danger: '#222222',
+  text: '#111111',
+  muted: '#666666',
+};
+
+export const darkColors = {
+  background: '#000000',
+  surface: '#121212',
+  primaryText: '#FFFFFF',
+  secondaryText: '#B0B0B0',
+  border: '#2C2C2C',
+  primaryButton: '#FFFFFF',
+  buttonText: '#000000',
+  primary: '#FFFFFF',
+  primarySoft: '#1E1E1E',
+  success: '#FFFFFF',
+  danger: '#D4D4D4',
+  text: '#FFFFFF',
+  muted: '#B0B0B0',
+};
