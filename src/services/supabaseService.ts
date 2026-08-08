@@ -137,15 +137,15 @@ const createProfilePayload = (
   role,
 });
 
-export const ensureProfileForUser = async (user: any): Promise<ProfileRecord> => {
-  const metadata = extractMetadata(user);
+export const ensureProfileForUser = async (user: any, role: 'student' | 'warden' = 'student'): Promise<ProfileRecord> => {
   const email = user?.email ?? '';
+  const metadata = extractMetadata(user);
   const fullName = metadata.full_name ?? email.split('@')[0] ?? 'User';
 
   return ensureProfile(
     user.id,
     email,
-    metadata.role,
+    role,
     fullName,
     metadata.room_number,
   );
@@ -157,7 +157,9 @@ export const signInWithEmail = async (email: string, password: string): Promise<
   }
 
   console.log('[Supabase] Signing in user', email);
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const res: any = await supabase.auth.signInWithPassword({ email, password });
+  const data = res.data;
+  const error = res.error;
   if (error) {
     const isEmailConfirmationError = (err: any) =>
       err?.code === 'email_not_confirmed' ||
@@ -166,13 +168,12 @@ export const signInWithEmail = async (email: string, password: string): Promise<
     if (isEmailConfirmationError(error)) {
       const user = data.user ?? data.session?.user;
       if (user?.id) {
-        const metadata = extractMetadata(user);
         const profile = createProfilePayload(
           user.id,
           user.email ?? email,
-          metadata.role,
-          metadata.full_name ?? email.split('@')[0],
-          metadata.room_number,
+          'student',
+          user.user_metadata?.full_name ?? email.split('@')[0],
+          user.user_metadata?.room_number ?? null,
         );
         return { user, session: null, profile, requiresEmailConfirmation: true };
       }
@@ -189,27 +190,22 @@ export const signInWithEmail = async (email: string, password: string): Promise<
   }
 
   if (!session) {
-    const metadata = extractMetadata(user);
     const profile = createProfilePayload(
       user.id,
       user.email ?? email,
-      metadata.role,
-      metadata.full_name ?? email.split('@')[0],
-      metadata.room_number,
+      'student',
+      user.user_metadata?.full_name ?? email.split('@')[0],
+      user.user_metadata?.room_number ?? null,
     );
 
     console.warn('[Supabase] Sign-in completed without an active session; email confirmation may be required.');
     return { user, session: null, profile, requiresEmailConfirmation: true };
   }
 
-  const metadata = extractMetadata(user);
-  const profile = await ensureProfile(
-    user.id,
-    user.email ?? email,
-    metadata.role,
-    metadata.full_name ?? email.split('@')[0],
-    metadata.room_number,
-  );
+  const profile = await getProfile(user.id);
+  if (!profile) {
+    throw new Error('No profile exists for this account. Please sign up first.');
+  }
 
   return { user, session, profile };
 };
@@ -226,7 +222,7 @@ export const signUpWithEmail = async (
   }
 
   console.log('[Supabase] Creating auth user', email);
-  const { data, error } = await supabase.auth.signUp({
+  const res2: any = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -237,6 +233,9 @@ export const signUpWithEmail = async (
       },
     },
   });
+
+  const data = res2.data;
+  const error = res2.error;
 
   if (error) {
     throw createSupabaseError(error, 'Unable to create the Supabase account.');
@@ -249,7 +248,7 @@ export const signUpWithEmail = async (
   }
 
   if (session) {
-    const profile = await ensureProfileForUser(user);
+    const profile = await ensureProfileForUser(user, role);
     return { user, session, profile };
   }
 
@@ -267,7 +266,9 @@ export const getStoredSession = async () => {
     return null;
   }
 
-  const { data: { session }, error } = await supabase.auth.getSession();
+  const sessRes: any = await supabase.auth.getSession();
+  const session = sessRes.data?.session ?? null;
+  const error = sessRes.error;
   if (error) {
     throw createSupabaseError(error, 'Unable to restore the saved Supabase session.');
   }
@@ -331,7 +332,31 @@ export const createNotice = async (title: string, description: string, createdBy
     throw createSupabaseError(error, 'Unable to create the notice.');
   }
 
-  return data;
+  return data as NoticeRecord;
+};
+
+export const updateNotice = async (id: string, updates: Partial<NoticeRecord>) => {
+  if (!supabase) {
+    throw new Error('Supabase is not configured. Check EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.');
+  }
+
+  const { data, error } = await supabase.from('notices').update(updates).eq('id', id).select().single();
+  if (error) {
+    throw createSupabaseError(error, 'Unable to update the notice.');
+  }
+
+  return data as NoticeRecord;
+};
+
+export const deleteNotice = async (id: string) => {
+  if (!supabase) {
+    throw new Error('Supabase is not configured. Check EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.');
+  }
+
+  const { error } = await supabase.from('notices').delete().eq('id', id);
+  if (error) {
+    throw createSupabaseError(error, 'Unable to delete the notice.');
+  }
 };
 
 export const getDeadlines = async (): Promise<DeadlineRecord | null> => {
@@ -403,6 +428,19 @@ export const getAllMeals = async (): Promise<MealRecord[]> => {
   const { data, error } = await supabase.from('meals').select('*').order('meal_date', { ascending: false });
   if (error) {
     throw createSupabaseError(error, 'Unable to load all meal selections.');
+  }
+
+  return (data ?? []) as MealRecord[];
+};
+
+export const getMealsForUser = async (userId: string): Promise<MealRecord[]> => {
+  if (!supabase) {
+    return [];
+  }
+
+  const { data, error } = await supabase.from('meals').select('*').eq('user_id', userId).order('meal_date', { ascending: false }).limit(100);
+  if (error) {
+    throw createSupabaseError(error, 'Unable to load meals for user.');
   }
 
   return (data ?? []) as MealRecord[];

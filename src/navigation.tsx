@@ -2,16 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import AppShell from './AppShell';
 import AdminDashboard from './adminDashboard';
-import { colors, spacing } from './theme';
+import { spacing } from './theme';
 import AuthScreen from './screens/AuthScreen';
 import { getProfile, getStoredSession, signOut, supabase } from './services/supabaseService';
 import { Profile } from './types';
 import { useTheme } from './theme/ThemeProvider';
+import ThemeToggle from './components/ThemeToggle';
 
-export type AppScreen = 'student' | 'admin';
+export type AppScreen = 'student' | 'warden' | 'auth';
 
 const Navigation = () => {
-  const [screen, setScreen] = useState<AppScreen>('student');
+  const [screen, setScreen] = useState<AppScreen>('auth');
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const { theme } = useTheme();
@@ -31,7 +32,7 @@ const Navigation = () => {
 
       if (isMounted) {
         setProfile(mappedProfile);
-        setScreen(mappedProfile.role === 'warden' ? 'admin' : 'student');
+        setScreen(mappedProfile.role === 'warden' ? 'warden' : 'student');
       }
     };
 
@@ -40,6 +41,7 @@ const Navigation = () => {
         if (isMounted) {
           setLoading(false);
           setProfile(null);
+          setScreen('auth');
         }
         return;
       }
@@ -50,7 +52,7 @@ const Navigation = () => {
         if (!userId) {
           if (isMounted) {
             setProfile(null);
-            setScreen('student');
+            setScreen('auth');
           }
           return;
         }
@@ -60,13 +62,13 @@ const Navigation = () => {
           applyProfile(profileRecord);
         } else if (isMounted) {
           setProfile(null);
-          setScreen('student');
+          setScreen('auth');
         }
       } catch (error) {
         console.error('[Navigation] Failed to restore Supabase session', error);
         if (isMounted) {
           setProfile(null);
-          setScreen('student');
+          setScreen('auth');
         }
       } finally {
         if (isMounted) {
@@ -75,21 +77,21 @@ const Navigation = () => {
       }
     };
 
-    const { data: { subscription } } = supabase?.auth.onAuthStateChange((event, session) => {
+    const authSubscription = supabase?.auth.onAuthStateChange((event, session) => {
       if (!isMounted) {
         return;
       }
 
       if (event === 'SIGNED_OUT') {
         setProfile(null);
-        setScreen('student');
+        setScreen('auth');
         setLoading(false);
         return;
       }
 
       if (!session?.user?.id) {
         setProfile(null);
-        setScreen('student');
+        setScreen('auth');
         setLoading(false);
         return;
       }
@@ -98,7 +100,7 @@ const Navigation = () => {
         .then((profileRecord) => {
           if (!profileRecord) {
             setProfile(null);
-            setScreen('student');
+            setScreen('auth');
             return;
           }
           applyProfile(profileRecord);
@@ -106,17 +108,33 @@ const Navigation = () => {
         .catch((error) => {
           console.error('[Navigation] Failed to sync Supabase profile', error);
           setProfile(null);
-          setScreen('student');
+          setScreen('auth');
         });
-    }) ?? { data: { subscription: { unsubscribe: () => undefined } } };
+    });
 
     void restoreSession();
 
     return () => {
       isMounted = false;
-      subscription.unsubscribe();
+      authSubscription?.data.subscription.unsubscribe();
     };
   }, []);
+
+  const handleAuthenticated = (nextProfile: Profile) => {
+    setProfile(nextProfile);
+    setScreen(nextProfile.role === 'warden' ? 'warden' : 'student');
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('[Navigation] Sign-out failed', error);
+    } finally {
+      setProfile(null);
+      setScreen('auth');
+    }
+  };
 
   if (loading) {
     return (
@@ -128,26 +146,24 @@ const Navigation = () => {
   }
 
   if (!profile) {
-    return <AuthScreen onAuthenticated={(nextProfile) => {
-      setProfile(nextProfile);
-      setScreen(nextProfile.role === 'warden' ? 'admin' : 'student');
-    }} />;
+    return <AuthScreen onAuthenticated={handleAuthenticated} />;
   }
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}> 
-      <View style={[styles.switcher, { backgroundColor: theme.colors.background }]}> 
-        <TouchableOpacity style={[styles.tab, screen === 'student' && styles.activeTab, { backgroundColor: screen === 'student' ? theme.colors.primary : theme.colors.surface }] } onPress={() => setScreen('student')}>
-          <Text style={[styles.tabText, screen === 'student' && styles.activeTabText, { color: screen === 'student' ? theme.colors.buttonText : theme.colors.muted }]}>Student</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.tab, screen === 'admin' && styles.activeTab, { backgroundColor: screen === 'admin' ? theme.colors.primary : theme.colors.surface }]} onPress={() => setScreen('admin')}>
-          <Text style={[styles.tabText, screen === 'admin' && styles.activeTabText, { color: screen === 'admin' ? theme.colors.buttonText : theme.colors.muted }]}>Warden</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.logoutButton, { backgroundColor: theme.colors.danger }]} onPress={async () => { await signOut(); setProfile(null); setScreen('student'); }}>
-          <Text style={[styles.logoutText, { color: theme.colors.buttonText }]}>Logout</Text>
-        </TouchableOpacity>
+      <View style={[styles.topBar, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}> 
+        <View>
+          <Text style={[styles.title, { color: theme.colors.text }]}>Youth-STAR</Text>
+          <Text style={[styles.subtitle, { color: theme.colors.muted }]}>Secure hostel meal management</Text>
+        </View>
+        <View style={styles.topActions}>
+          <ThemeToggle />
+          <TouchableOpacity style={[styles.logoutButton, { backgroundColor: theme.colors.primaryButton }]} onPress={handleSignOut}>
+            <Text style={[styles.logoutText, { color: theme.colors.buttonText }]}>Sign out</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-      {screen === 'student' ? <AppShell profile={profile} /> : <AdminDashboard profile={profile} />}
+      {profile.role === 'warden' ? <AdminDashboard profile={profile} /> : <AppShell profile={profile} />}
     </View>
   );
 };
@@ -156,12 +172,11 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: spacing.sm },
-  switcher: { flexDirection: 'row', paddingHorizontal: spacing.lg, paddingTop: spacing.md, alignItems: 'center', gap: 8 },
-  tab: { flex: 1, paddingVertical: 10, borderRadius: 999, alignItems: 'center' },
-  activeTab: { backgroundColor: colors.primary },
-  tabText: { fontWeight: '700' },
-  activeTabText: { color: colors.surface },
-  logoutButton: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999 },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1 },
+  title: { fontSize: 20, fontWeight: '800' },
+  subtitle: { fontSize: 12, marginTop: 2 },
+  topActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  logoutButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 },
   logoutText: { fontWeight: '700' },
 });
 

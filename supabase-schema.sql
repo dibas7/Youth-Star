@@ -81,7 +81,7 @@ CREATE POLICY "Users can insert own profile" ON public.profiles
 FOR INSERT WITH CHECK (auth.uid() = id);
 
 DROP POLICY IF EXISTS "Wardens can view all profiles" ON public.profiles;
-CREATE POLICY "Wardens can view all profiles" ON public.profiles
+CREATE POLICY "Wardens can view all profiles " ON public.profiles
 FOR SELECT USING (public.is_warden());
 
 -- meals
